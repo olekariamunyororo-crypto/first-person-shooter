@@ -8,27 +8,32 @@ import {Vector2} from 'three/src/math/Vector2'
 
 const caster = new Raycaster()
 
+/** Detect coarse pointer / touch devices */
+function isTouchDevice() {
+	return (
+		(typeof window !== 'undefined' &&
+			('ontouchstart' in window ||
+				(navigator as any).maxTouchPoints > 0 ||
+				window.matchMedia('(pointer: coarse)').matches)) ||
+		false
+	)
+}
+
 export
 @component
 @reactive
 class FirstPersonCamera {
 	PropTypes!: Props<
 		Partial<this>,
-		'instance' | 'onPlayerMove' | 'crouchAmount' | 'elementsToIntersect' | 'onIntersect' | 'autoIntersect'
+		| 'instance'
+		| 'onPlayerMove'
+		| 'crouchAmount'
+		| 'elementsToIntersect'
+		| 'onIntersect'
+		| 'autoIntersect'
+		| 'enableMobileControls'
 	>
 
-	// TODO move this to the @component decorator
-	/**
-	 * This is similar to ref={} on regular elements. Pass in a signal setter
-	 * (or function that accepts the instance as an arg) to get an instance of
-	 * this component from JSX.
-	 *
-	 * Example:
-	 *
-	 * ```js
-	 * return <FirstPersonCamera getInstance={setCamera} />
-	 * ```
-	 */
 	@signal instance: ((i: this) => void) | null = null
 
 	@signal onPlayerMove:
@@ -39,13 +44,14 @@ class FirstPersonCamera {
 
 	@signal elementsToIntersect: Set<Element3D> | null = null
 
-	// TODO we need ability to specify {equals: false} for @signal decorator so we don't have to make a new array each time we update it.
 	@signal intersectedElements: Element3D[] = []
 
-	// FIXME: we shouldn't need this, but createEffect(() => camera.intersectedElements) is not working right now for some reason. We use a callback for now.
 	@signal onIntersect: ((n: Element3D[]) => void) | null = null
 
 	@signal autoIntersect = true
+
+	/** When true (default on touch devices) use on-screen joystick + touch-look instead of pointer-lock. */
+	@signal enableMobileControls = isTouchDevice()
 
 	camRotation = new XYZNumberValues()
 	camPosition = new XYZNumberValues()
@@ -54,6 +60,10 @@ class FirstPersonCamera {
 
 	root!: Element3D
 	camera!: PerspectiveCamera
+
+	// Mobile movement state (normalized -1..1)
+	mobileMoveX = 0
+	mobileMoveY = 0
 
 	template = (props: this['PropTypes']) => (
 		<lume-element3d
@@ -73,10 +83,6 @@ class FirstPersonCamera {
 					>
 						<slot name="camera-child"></slot>
 					</lume-perspective-camera>
-
-					{/* <lume-camera-rig active rotation={[this.camRotation.x]}>
-						<slot name="camera-child"></slot>
-					</lume-camera-rig> */}
 				</>
 			}
 		>
@@ -91,20 +97,36 @@ class FirstPersonCamera {
 		this.onPlayerMove?.({x, y, z, rx, ry, crouch})
 	}
 
+	/** Called by external mobile joystick UI */
+	setMobileMove(x: number, y: number) {
+		this.mobileMoveX = clamp(x, -1, 1)
+		this.mobileMoveY = clamp(y, -1, 1)
+	}
+
+	/** Called by external look-area / touch handlers */
+	applyMobileLookDelta(dx: number, dy: number, sensitivity = 0.15) {
+		this.camRotation.y -= dx * sensitivity
+		this.camRotation.x = clamp(this.camRotation.x + dy * sensitivity, -90, 90)
+		this.__playerMove()
+	}
+
 	onMount() {
 		queueMicrotask(() => this.instance?.(this))
 
 		createEffect(() => (this.camPosition.y = this.__crouchAmount))
 
-		createEffect(() => {
-			const scene = this.root.scene
+		const moveSpeed = 1
 
+		// ---------- Desktop pointer-lock look ----------
+		createEffect(() => {
+			if (this.enableMobileControls) return // skip on mobile
+
+			const scene = this.root.scene
 			if (!scene) return
 
 			const onmove = (e: PointerEvent) => {
 				this.camRotation.y -= e.movementX * 0.1
 				this.camRotation.x = clamp(this.camRotation.x + e.movementY * 0.1, -90, 90)
-
 				this.__playerMove()
 			}
 
@@ -119,7 +141,6 @@ class FirstPersonCamera {
 				document.addEventListener('pointerlockchange', onlockchange)
 			}
 
-			// TODO move to onmousedown={} prop inside JSX (currently doesn't work, bug?)
 			scene.addEventListener('click', onclick)
 
 			onCleanup(() => {
@@ -129,85 +150,117 @@ class FirstPersonCamera {
 			})
 		})
 
-		const moveSpeed = 1
-		const keysDown = {w: false, a: false, s: false, d: false}
+		// ---------- Desktop keyboard movement ----------
+		createEffect(() => {
+			if (this.enableMobileControls) return
 
-		for (const key of ['w', 'a', 's', 'd'] as const) {
-			window.addEventListener('keydown', e => {
-				if (!document.pointerLockElement) return
-				if (key != e.key.toLowerCase()) return
-				if (keysDown[key]) return
+			const keysDown = {w: false, a: false, s: false, d: false}
 
-				keysDown[key] = true
+			for (const key of ['w', 'a', 's', 'd'] as const) {
+				const onKeyDown = (e: KeyboardEvent) => {
+					if (!document.pointerLockElement) return
+					if (key != e.key.toLowerCase()) return
+					if (keysDown[key]) return
 
-				let nextPositionZ = (_dt: number) => 0
-				let nextPositionY = (_dt: number) => 0
+					keysDown[key] = true
 
-				if (key === 'w') {
-					nextPositionZ = dt => -Math.cos(toRadians(this.camRotation.y)) * moveSpeed * dt
-					nextPositionY = dt => -Math.sin(toRadians(this.camRotation.y)) * moveSpeed * dt
+					let nextPositionZ = (_dt: number) => 0
+					let nextPositionY = (_dt: number) => 0
+
+					if (key === 'w') {
+						nextPositionZ = dt => -Math.cos(toRadians(this.camRotation.y)) * moveSpeed * dt
+						nextPositionY = dt => -Math.sin(toRadians(this.camRotation.y)) * moveSpeed * dt
+					}
+					if (key === 'a') {
+						nextPositionZ = dt => Math.sin(toRadians(this.camRotation.y)) * moveSpeed * dt
+						nextPositionY = dt => -Math.cos(toRadians(this.camRotation.y)) * moveSpeed * dt
+					}
+					if (key === 's') {
+						nextPositionZ = dt => Math.cos(toRadians(this.camRotation.y)) * moveSpeed * dt
+						nextPositionY = dt => Math.sin(toRadians(this.camRotation.y)) * moveSpeed * dt
+					}
+					if (key === 'd') {
+						nextPositionZ = dt => -Math.sin(toRadians(this.camRotation.y)) * moveSpeed * dt
+						nextPositionY = dt => Math.cos(toRadians(this.camRotation.y)) * moveSpeed * dt
+					}
+
+					Motor.addRenderTask((_t, dt) => {
+						this.camPosition.z += nextPositionZ(dt)
+						this.camPosition.x += nextPositionY(dt)
+						this.__playerMove()
+						return keysDown[key]
+					})
 				}
-				if (key === 'a') {
-					nextPositionZ = dt => Math.sin(toRadians(this.camRotation.y)) * moveSpeed * dt
-					nextPositionY = dt => -Math.cos(toRadians(this.camRotation.y)) * moveSpeed * dt
-				}
-				if (key === 's') {
-					nextPositionZ = dt => Math.cos(toRadians(this.camRotation.y)) * moveSpeed * dt
-					nextPositionY = dt => Math.sin(toRadians(this.camRotation.y)) * moveSpeed * dt
-				}
-				if (key === 'd') {
-					nextPositionZ = dt => -Math.sin(toRadians(this.camRotation.y)) * moveSpeed * dt
-					nextPositionY = dt => Math.cos(toRadians(this.camRotation.y)) * moveSpeed * dt
+
+				const onKeyUp = (e: KeyboardEvent) => {
+					if (key != e.key.toLowerCase()) return
+					keysDown[key] = false
 				}
 
-				Motor.addRenderTask((_t, dt) => {
-					this.camPosition.z += nextPositionZ(dt)
-					this.camPosition.x += nextPositionY(dt)
+				window.addEventListener('keydown', onKeyDown)
+				window.addEventListener('keyup', onKeyUp)
 
-					this.__playerMove()
-
-					return keysDown[key]
+				onCleanup(() => {
+					window.removeEventListener('keydown', onKeyDown)
+					window.removeEventListener('keyup', onKeyUp)
 				})
-			})
+			}
 
-			window.addEventListener('keyup', e => {
+			let crouched = false
+			const onShiftDown = (e: KeyboardEvent) => {
 				if (!document.pointerLockElement) return
-				if (key != e.key.toLowerCase()) return
-				keysDown[key] = false
+				if (e.key != 'Shift') return
+				if (crouched) return
+				crouched = true
+				this.__crouchAmount = this.crouchAmount
+				this.__playerMove()
+			}
+			const onShiftUp = (e: KeyboardEvent) => {
+				if (e.key != 'Shift') return
+				crouched = false
+				this.__crouchAmount = 0
+				this.__playerMove()
+			}
+			window.addEventListener('keydown', onShiftDown)
+			window.addEventListener('keyup', onShiftUp)
+			onCleanup(() => {
+				window.removeEventListener('keydown', onShiftDown)
+				window.removeEventListener('keyup', onShiftUp)
 			})
-		}
-
-		let crouched = false
-
-		window.addEventListener('keydown', e => {
-			if (!document.pointerLockElement) return
-			if (e.key != 'Shift') return
-			if (crouched) return
-
-			crouched = true
-			this.__crouchAmount = this.crouchAmount
-			this.__playerMove()
 		})
 
-		// TODO LUME: make raycaster an HTML element so that the ray can be positioned in 3D space just like any other object.
+		// ---------- Mobile continuous movement from joystick ----------
+		createEffect(() => {
+			if (!this.enableMobileControls) return
 
-		window.addEventListener('keyup', e => {
-			if (e.key != 'Shift') return
-			crouched = false
-			this.__crouchAmount = 0
-			this.__playerMove()
+			Motor.addRenderTask((_t, dt) => {
+				const mx = this.mobileMoveX
+				const my = this.mobileMoveY
+				if (mx === 0 && my === 0) return true // keep running
+
+				const yaw = toRadians(this.camRotation.y)
+				// Forward/back (my) and strafe (mx)
+				const forwardZ = -Math.cos(yaw) * my * moveSpeed * dt
+				const forwardX = -Math.sin(yaw) * my * moveSpeed * dt
+				const strafeZ = Math.sin(yaw) * mx * moveSpeed * dt
+				const strafeX = -Math.cos(yaw) * mx * moveSpeed * dt
+
+				this.camPosition.z += forwardZ + strafeZ
+				this.camPosition.x += forwardX + strafeX
+				this.__playerMove()
+				return true // keep the task alive
+			})
 		})
 
+		// ---------- Auto-intersect ----------
 		createEffect(() => {
 			if (!this.autoIntersect) return
 
-			// Any time these change,
 			const {x: _x, y: _y, z: _z} = this.camPosition
 			const {x: _rx, y: _ry} = this.camRotation
 			this.__crouchAmount
 			this.elementsToIntersect
 
-			// schedule a raycast
 			this.throttledIntersect[0]()
 		})
 	}
@@ -219,36 +272,27 @@ class FirstPersonCamera {
 		this.intersectDeferred = true
 
 		Motor.once(async () => {
-			// ensure we run this after scene transforms are updated. (TODO better API f.e. Motor.afterRender())
 			await Promise.resolve()
 			await Promise.resolve()
 
 			this.intersectDeferred = false
 
-			// update line-of-sight intersections so App can determine who gets shot.
-			caster.setFromCamera(
-				new Vector2(0, 0), // cast from the center of the screen
-				this.camera!.three,
-			)
+			caster.setFromCamera(new Vector2(0, 0), this.camera!.three)
 
 			if (!this.elementsToIntersect) return
 
 			const intersections = caster.intersectObjects(
-				// [...this.elementsToIntersect] // broken in Quest Browser
 				Array.from(this.elementsToIntersect)
 					.map(el => el?.three)
-					// fixme bug: undefined values getting in here. This whole thing is a quick hack for Solid Hack. :]
 					.filter(o => !!o),
 			)
 
 			batch(() => {
 				this.intersectedElements = []
 
-				// TODO this is definitely not optimal
 				for (const i of intersections) {
 					for (const el of this.elementsToIntersect!) {
-						if (!el) continue // FIXME bug, should be no undefineds. Bug in how disconnected players are removed.
-
+						if (!el) continue
 						el.three.traverse(o => {
 							if (i.object === o) {
 								this.intersectedElements.push(el)
@@ -257,15 +301,11 @@ class FirstPersonCamera {
 					}
 				}
 
-				// FIXME we should need this, an outside consumer should be able
-				// to make an effect that depends on cam.intersectedElemnts but
-				// it doesn't work right now for some reason.
 				this.onIntersect?.(this.intersectedElements)
 			})
 		})
-	}, 50) // TODO what's a good value?
+	}, 50)
 
-	/** Manually tell the camera when to run intersection. */
 	intersect() {
 		this.throttledIntersect[0]()
 	}
@@ -275,12 +315,11 @@ async function shadow(el: Element, args: () => JSX.Element | [JSX.Element, Shado
 	const _args = args()
 	const [shadowChildren, shadowOptions = {mode: 'open'}] =
 		_args === true
-			? [() => <></>] // no args
+			? [() => <></>]
 			: isShadowArgTuple(_args)
 			? _args
 			: [() => _args]
 
-	// FIXME HACKY: Defer for one microtask so custom element upgrades can happen. Will this always work?
 	await Promise.resolve()
 
 	if (el.tagName.includes('-') && !customElements.get(el.tagName.toLowerCase())) {
@@ -298,7 +337,7 @@ async function shadow(el: Element, args: () => JSX.Element | [JSX.Element, Shado
 	}
 
 	const root = el.attachShadow(shadowOptions)
-	// @ts-ignore :(
+	// @ts-ignore
 	render(shadowChildren, root)
 }
 
