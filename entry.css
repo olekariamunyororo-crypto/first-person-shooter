@@ -91,3 +91,134 @@ lume-element3d {
 	width: 2px;
 	height: 20px;
 }
+
+/* ========== Mobile controls ========== */
+.mobile-controls {
+	pointer-events: none;
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.joystick-zone {
+	pointer-events: auto;
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 45%;
+	height: 45%;
+	max-width: 220px;
+	max-height: 220px;
+	display: flex;
+	align-items: flex-end;
+	justify-content: flex-start;
+	padding: 16px;
+	box-sizing: border-box;
+}
+
+.joystick-base {
+	position: relative;
+	width: 120px;
+	height: 120px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.12);
+	border: 2px solid rgba(255, 255, 255, 0.25);
+	box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.joystick-knob {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 52px;
+	height: 52px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.45);
+	border: 2px solid rgba(255, 255, 255, 0.7);
+	transform: translate(-50%, -50%);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+	transition: none;
+}
+
+.look-zone {
+	pointer-events: auto;
+	position: absolute;
+	right: 0;
+	top: 0;
+	width: 55%;
+	height: 100%;
+	touch-action: none;
+}
+
+.fire-btn {
+	pointer-events: auto;
+	position: absolute;
+	right: 24px;
+	bottom: 32px;
+	width: 88px;
+	height: 88px;
+	border-radius: 50%;
+	border: 3px solid rgba(255, 80, 80, 0.9);
+	background: rgba(220, 40, 40, 0.75);
+	color: white;
+	font-family: 'Work Sans', sans-serif;
+	font-weight: 700;
+	font-size: 16px;
+	letter-spacing: 0.05em;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+	-webkit-tap-highlight-color: transparent;
+	outline: none;
+	touch-action: manipulation;
+}
+
+.fire-btn:active {
+	background: rgba(255, 60, 60, 0.95);
+	transform: scale(0.94);
+}
+
+/* Mobile-friendly health bar */
+@media (max-width: 768px), (pointer: coarse) {
+	.health-bar {
+		width: 40%;
+		height: 28px;
+		top: 12px;
+		left: 12px;
+	}
+	.dead h1 {
+		font-size: 3.5rem;
+		text-align: center;
+		padding: 0 12px;
+	}
+	.crosshair::before {
+		width: 16px;
+	}
+	.crosshair::after {
+		height: 16px;
+	}
+}
+
+/* Landscape phones: keep joystick reachable */
+@media (max-height: 500px) and (orientation: landscape) {
+	.joystick-zone {
+		height: 70%;
+		max-height: 160px;
+	}
+	.joystick-base {
+		width: 100px;
+		height: 100px;
+	}
+	.joystick-knob {
+		width: 44px;
+		height: 44px;
+	}
+	.fire-btn {
+		width: 72px;
+		height: 72px;
+		right: 16px;
+		bottom: 16px;
+		font-size: 14px;
+	}
+}
