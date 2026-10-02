@@ -44,6 +44,7 @@ import {
 	createSignalFunction,
 } from 'classy-solid'
 import {FirstPersonCamera} from './FirstPersonCamera'
+import {MobileControls} from './MobileControls'
 import {Lights} from './Lights'
 import {type Player, playersCollection} from '../../imports/collections/players'
 import {type MapItem, mapItems} from '../../imports/collections/mapItems'
@@ -164,6 +165,8 @@ class App {
 
 	camera = createSignalFunction<FirstPersonCamera>()
 
+	localRifle = createSignalFunction<Rifle>()
+
 	template = () => (
 		<>
 			<lume-scene ref={this.scene} perspective="800" webgl enable-css="false" shadowmap-type="pcfsoft">
@@ -201,6 +204,7 @@ class App {
 						>
 							<lume-element3d position="40 120 -100" slot="camera-child">
 								<Rifle
+									instance={this.localRifle}
 									shootOnClick={true}
 									shotThrottle={400}
 									onShoot={() => {
@@ -250,6 +254,11 @@ class App {
 
 			<div class="overlay">
 				<div class="crosshair"></div>
+				<MobileControls
+					camera={this.camera()}
+					rifle={this.localRifle()}
+					visible={typeof window !== "undefined" && ("ontouchstart" in window || (navigator as any).maxTouchPoints > 0)}
+				/>
 
 				<div class="health-bar">
 					<div class="health-value" style={{width: this.health + '%'}}></div>
