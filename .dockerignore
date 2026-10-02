@@ -1,0 +1,9 @@
+.meteor/local
+node_modules
+.git
+.gitignore
+dist
+*.md
+.DS_Store
+.env
+.env.*
