@@ -6,6 +6,7 @@ COPY . $APP_SOURCE_FOLDER/
 
 # Install npm dependencies with meteor npm (works without package-lock.json)
 RUN cd $APP_SOURCE_FOLDER && meteor npm install
+RUN cd $APP_SOURCE_FOLDER && meteor npm run build
 
 # Build the Meteor production bundle
 RUN bash $SCRIPTS_FOLDER/build-meteor-bundle.sh
