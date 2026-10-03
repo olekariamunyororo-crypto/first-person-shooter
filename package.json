@@ -34,10 +34,10 @@
 		"classy-solid": "^0.4.2",
 		"lodash.throttle": "^4.1.1",
 		"lowclass": "^8.0.0",
-		"lume": "^0.3.0-alpha.43",
+		"lume": "0.3.0-alpha.43",
 		"meteor-node-stubs": "^1.0.0",
 		"solid-js": "^1.0.0",
-		"three": ">=0.139.0"
+		"three": "0.169.0"
 	},
 	"devDependencies": {
 		"@babel/core": "^7.25.2",
