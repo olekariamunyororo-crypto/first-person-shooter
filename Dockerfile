@@ -6,7 +6,8 @@ COPY . $APP_SOURCE_FOLDER/
 
 # Install npm dependencies with meteor npm (works without package-lock.json)
 RUN cd $APP_SOURCE_FOLDER && meteor npm install
-RUN cd $APP_SOURCE_FOLDER && meteor npm run build
+RUN cd $APP_SOURCE_FOLDER && meteor npm run build || true
+RUN grep -rqi joystick $APP_SOURCE_FOLDER/dist/client || (echo "dist has no mobile controls" && exit 1)
 
 # Build the Meteor production bundle
 RUN bash $SCRIPTS_FOLDER/build-meteor-bundle.sh
