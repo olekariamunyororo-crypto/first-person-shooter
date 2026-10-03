@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: first-person-shooter
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: MONGO_URL
+        sync: false
+      - key: ROOT_URL
+        value: https://first-person-shooter.onrender.com
